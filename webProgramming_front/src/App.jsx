@@ -123,6 +123,7 @@ const deleteStudent = async (id) => {
 
       <SubHeading>학생 추가하기</SubHeading>
       <p>이미 있는 id를 추가하기 할시에는 해당 id의 정보가 업데이트 됩니다.</p>
+      
       <Input
         type="text"
         placeholder="ID"
