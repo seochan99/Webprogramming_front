@@ -88,10 +88,8 @@ const deleteStudent = async (id) => {
   try {
     const confirmed = window.confirm("학생 정보를 정말 삭제하시겠습니까?");
     if (confirmed) {
-      const response = await axios.delete(`student?id=${id}`);
-      if (response.status === 200) {
+        await axios.delete(`student?id=${id}`);
         fetchStudents();
-      } 
     }else{
       return;
     }
