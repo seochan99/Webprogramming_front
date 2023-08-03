@@ -2,52 +2,106 @@ import express, { query } from "express";
 import pg from "pg";
 import bodyParser from "body-parser";
 import cors from "cors";
-
-import { Strategy } from "passport-http-bearer";
-import { sign } from "jsonwebtoken";
 import passport from "passport";
+import { Strategy } from "passport-local";
+import jwt from "jsonwebtoken";
+import jwtPass from "passport-jwt";
+import localPass from "passport-local";
 
 // const express = require("express");
 const app = express();
-
 app.use(bodyParser.json());
 // Allow requests only from http://localhost:5173
 const corsOptions = {
-    // origin: "http://localhost:5173",
-    origin: "",
+    origin: "http://localhost:5173",
+    // origin: "http://3.35.167.3:5000",
     credentials: true,
     // 다른 도메인간 쿠키 공유 허락 옵션
 };
 
 app.use(cors(corsOptions));
 
-// 새로운 라이브러리 선택해서 추가할거면 use 를 작성해야함
-passport.use(
-    new Strategy(
-        {
-            usernameField: "id",
-            passwordField: "pw",
-        },
-        function (username, password, done) {
-            // 디비가 있다면 일치하는 회원 정보가 있다면 처리
-            if (username === "admin" && password === "1234") {
-                return done(null, { username: "admin" });
-            } else {
-                return done(null, false);
-            }
-        }
-    )
-);
-
 const pool = new pg.Pool({
-    host: "",
-    user: "",
-    password: "",
+    host: "ls-ff80743064e11459f554d70cc21e07f49d1050f0.cbcinokpwf4o.ap-northeast-2.rds.amazonaws.com",
+    user: "dbmasteruser",
+    password: "?FmG#?BAqI4V)Q33sRy{cN?qosn?,Xl[",
     database: "postgres",
 });
 // const client = await pool.connect();
 // const result = await client.query("SELECT * FROM student");
 // console.log(result);
+// 다른 함수에서 토큰을 이용한 인증을 사용할 수 있도록 설정
+passport.use(
+    "jwt",
+    new jwtPass.Strategy(
+        {
+            jwtFromRequest: jwtPass.ExtractJwt.fromAuthHeaderAsBearerToken(),
+            secretOrKey: "secret",
+        },
+        (jwt_payload, done) => {
+            done(null, {
+                id: jwt_payload.id,
+            });
+        }
+    )
+);
+// 처음 로그인 할 때 사용되는 함수
+passport.use(
+    "local",
+    new localPass.Strategy(
+        { usernameField: "userId", passwordField: "password" },
+        async (username, password, done) => {
+            const client = await pool.connect();
+            const result = await client.query(
+                "select * from public.user where name=$1 and password = $2",
+                [username, password]
+            );
+            client.release();
+            if (result.rows.length > 0) {
+                return done(null, { username });
+            }
+            return done(null, false, {
+                reason: "Invalid username or password",
+            });
+        }
+    )
+);
+
+app.use(passport.initialize());
+
+// 로그인 정보를 받아서 토큰 결과를 제공하는 함수
+app.post("/login", (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
+        if (err || !user) {
+            return next(err);
+        }
+        if (info) {
+            return res.status(410).send(info.reason);
+        }
+        return req.login(user, { session: false }, (loginErr) => {
+            if (loginErr) {
+                return next(loginErr);
+            }
+            // jwt.sign을 통해 jwt token을 생성
+            const token = jwt.sign({ id: user.username }, "secret");
+            return res.json({ token: token });
+        });
+    })(req, res, next);
+});
+
+app.get(
+    `/mypage`,
+    passport.authenticate("jwt", { session: false }),
+    async (req, res) => {
+        const client = await pool.connect();
+        const result = await client.query(
+            "SELECT * from public.user where name = $1",
+            [req.user.id]
+        );
+        res.json(result.rows);
+        client.release();
+    }
+);
 
 let visit = 1;
 
@@ -100,41 +154,9 @@ app.post("/student", async (req, res) => {
     client.release();
 });
 
-app.post("/login", async (req, res) => {
-    passport.authenticate("local", { session: false }, (err, user, info) => {
-        if (user) {
-            // jwt 토큰 발급
-            const token = sign(user, "aaaa", { expiresIn: "1h" });
-            // 로그인 체크
-
-            return res.json({ user, token });
-        } else {
-            return res.status(401).json({ message: "Login Fail" });
-        }
-    })(req, res);
-});
-
 // GET-------------------------------------------------------------------
 app.get("/student", async (req, res) => {
     const client = await pool.connect();
-
-    // req.query.id에 데이터가 있으면 일치하는 id 하나를 찾아서 반환
-    // req.query.id에 데이터가 없으면 전체 학생 정보를 반환
-
-    // For문을 이용한 id 필터링-----------------------------------------
-    // if (req.query.id) {
-    //   const result = await client.query(`SELECT * FROM student`);
-    //   for (let i = 0; i < req.query.length; i++) {
-    //     if (result.rows[i].id === req.query.id) {
-    //       res.json(result.rows[i]);
-    //       break;
-    //     }
-    //   }
-    // } else {
-    //   const result = await client.query("SELECT * FROM student");
-    //   res.json(result.rows);
-    // }
-
     // 선호 id 필터링---------------------------------------------
     if (req.query.id) {
         const result = await client.query(
@@ -160,7 +182,32 @@ app.get("/show", (req, res) => {
     res.json({ message: `${visit}회 방문` });
 });
 
+app.get("/fresh", async (req, res) => {
+    const client = await pool.connect();
+    const result = await client.query(`SELECT * FROM student`);
+    const fresh = [];
+    for (let i = 0; i < result.rowCount; i++) {
+        let high_num = result.rows[i].id.slice(0, 4);
+        if (high_num > "2014") {
+            fresh.push(i);
+        }
+    }
+    res.json({ message: "succeed!" });
+    client.release();
+});
+
+app.post("/login", (req, res) => {
+    passport.authenticate("local", { session: false }, (err, user) => {
+        if (!user) {
+            res.status(403).send("로그인을 실패했습니다.");
+            const token = jwt.sign(user, "wnstj701");
+            return res.json(user, token);
+        }
+    })(req, res);
+});
+passport.initialize();
+
 // 서버에 접속하기 위해 필요한 메소드
-app.listen(5000, () => {
+app.listen(5005, () => {
     console.log("Server Open!");
 });
