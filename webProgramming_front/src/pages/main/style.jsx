@@ -60,3 +60,10 @@ export const LoginButton = styled.button`
     cursor: pointer;
     font-weight: bold;
 `;
+
+export const Paragraph = styled.p`
+    font-weight: 700;
+    color: #ff0000;
+    text-align: center;
+    font-size: larger;
+`;

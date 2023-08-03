@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as S from "./style";
+import axios from "../../api/axios";
 
 function Main() {
     const [students, setStudents] = useState([]);
@@ -9,6 +10,35 @@ function Main() {
         gpa: "",
         major: "",
     });
+
+    const [user, setUser] = useState();
+
+    useEffect(() => {
+        // 토큰 가져오기
+        try {
+            const token = localStorage.getItem("token");
+            // 토큰이 있을 경우에만 사용자 정보 요청
+            if (token) {
+                // 서버에 사용자 정보 요청
+                axios
+                    .get("/mypage", {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                    })
+                    .then((response) => {
+                        setUser(response.data[0]);
+                    })
+                    .catch((error) => {
+                        console.error(
+                            "사용자 정보를 가져오는 데 실패했습니다."
+                        );
+                    });
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }, []);
 
     // student 정보 가져오기
     const fetchStudents = async () => {
@@ -76,11 +106,28 @@ function Main() {
                     <S.ListItem key={student.id}>
                         {student.id} - {student.name} - {student.major} -{" "}
                         {student.gpa}
-                        <S.DeleteButton
-                            onClick={() => deleteStudent(student.id)}
-                        >
-                            Delete
-                        </S.DeleteButton>
+                        {user ? (
+                            <>
+                                <S.DeleteButton
+                                    onClick={() => deleteStudent(student.id)}
+                                >
+                                    Delete
+                                </S.DeleteButton>
+                            </>
+                        ) : (
+                            <>
+                                <S.DeleteButton
+                                    onClick={() => {
+                                        alert(
+                                            "로그인 후 삭제하실 수 있습니다."
+                                        );
+                                    }}
+                                    style={{ backgroundColor: "gray" }}
+                                >
+                                    Delete
+                                </S.DeleteButton>
+                            </>
+                        )}
                     </S.ListItem>
                 ))}
             </S.List>
@@ -90,40 +137,58 @@ function Main() {
                 이미 있는 id를 추가하기 할시에는 해당 id의 정보가 업데이트
                 됩니다.
             </p>
-
-            <S.Input
-                type="text"
-                placeholder="ID"
-                value={newStudent.id}
-                onChange={(e) =>
-                    setNewStudent({ ...newStudent, id: e.target.value })
-                }
-            />
-            <S.Input
-                type="text"
-                placeholder="Name"
-                value={newStudent.name}
-                onChange={(e) =>
-                    setNewStudent({ ...newStudent, name: e.target.value })
-                }
-            />
-            <S.Input
-                type="text"
-                placeholder="GPA"
-                value={newStudent.gpa}
-                onChange={(e) =>
-                    setNewStudent({ ...newStudent, gpa: e.target.value })
-                }
-            />
-            <S.Input
-                type="text"
-                placeholder="Major"
-                value={newStudent.major}
-                onChange={(e) =>
-                    setNewStudent({ ...newStudent, major: e.target.value })
-                }
-            />
-            <S.AddButton onClick={addStudent}>Add</S.AddButton>
+            {user ? (
+                <>
+                    <S.Input
+                        type="text"
+                        placeholder="ID"
+                        value={newStudent.id}
+                        onChange={(e) =>
+                            setNewStudent({ ...newStudent, id: e.target.value })
+                        }
+                    />
+                    <S.Input
+                        type="text"
+                        placeholder="Name"
+                        value={newStudent.name}
+                        onChange={(e) =>
+                            setNewStudent({
+                                ...newStudent,
+                                name: e.target.value,
+                            })
+                        }
+                    />
+                    <S.Input
+                        type="text"
+                        placeholder="GPA"
+                        value={newStudent.gpa}
+                        onChange={(e) =>
+                            setNewStudent({
+                                ...newStudent,
+                                gpa: e.target.value,
+                            })
+                        }
+                    />
+                    <S.Input
+                        type="text"
+                        placeholder="Major"
+                        value={newStudent.major}
+                        onChange={(e) =>
+                            setNewStudent({
+                                ...newStudent,
+                                major: e.target.value,
+                            })
+                        }
+                    />
+                    <S.AddButton onClick={addStudent}>Add</S.AddButton>
+                </>
+            ) : (
+                <>
+                    <S.Paragraph>
+                        로그인 후 학생 추가를 이용하실 수 있습니다.
+                    </S.Paragraph>
+                </>
+            )}
         </S.AppContainer>
     );
 }
